@@ -30,7 +30,7 @@ NB_HS010 {
 						noise
 				]);
 				var env = EnvGen.kr(Env.adsr(att, dec, sus, rel, curve: crv), gate, doneAction: Done.pauseSelf);
-				var cutoff = (lpf + (lpflfo * lfo) + (lpfenv * env) + (lpfpitch * freq)).clip(20, 20000);
+				var cutoff = (lpf + (lpflfo * lfo) + (lpfenv * env) + (lpfpitch * freq)).clip(20, 19000);
 				var pulsew = (pw + (pwlfo * lfo) + (pwenv * env)).clip(0, 1);
 				var finfreq = Lag.kr(freq, glide) + (pitchlfo * lfo);
 				var sine = Osc.ar(sinidx, finfreq);
@@ -144,7 +144,7 @@ NB_HS010 {
 			synthgroup = ParGroup.new(Server.default, \addToHead);
 
 			wt = Buffer.allocConsecutive(4, Server.default, 2048, 1);
-			wt[0].loadCollection(Signal.sineFill(1024,[1],[0]).asWavetable); // sine
+			wt[0].loadCollection(Signal.sineFill(1024,[1],[pi]).asWavetable); // sine
 			wt[1].loadCollection(
 				Signal.sineFill(1024,harmnum.collect({|a, idx| if(a.even, {1/(a+1).pow(2)}, {0}) }),([pi, 0, 0, 0]!(harmnum/4)).flatten).asWavetable
 			); // tri
