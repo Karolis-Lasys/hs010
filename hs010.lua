@@ -25,11 +25,16 @@ local note_const = {}
 local cur_scale = {}
 local scale_name, scale_root
 
--- sequencer logic
+-- logic and such
 function init()
-  -- add engine params
-  HS010.add_params()
+  -- init nb
   nb:init()
+  nb:add_param("voice_id", "voice_id")
+  nb:add_player_params()
+  clock.run(function()
+    clock.sleep(2)
+    params:bang()
+  end)
   -- start redraw loop
   redraw_loop = metro.init(redraw, 0.1, -1)
   redraw_loop:start()
