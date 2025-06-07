@@ -12,17 +12,37 @@ local lib_lat = require 'lattice'
 local musicutil = require 'musicutil'
 local s = require 'sequins'
 local nb = require('hs010/lib/nb/lib/nb')
+local util = require 'util'
+local UI = require 'ui'
 local player
 
+-- consts
+local CONST_NOTELEN = {1 / 64, 1 / 32, 1 / 24, 1 / 16, 1 / 12, 1 / 8, 1 / 6, 1 / 4, 1 / 3, 1 / 2, 3 / 4, 1, 2, 3, 4, 6, 8, 12, 16, 24, 32}
+local CONST_W = 128
+local CONST_H = 64
+local CONST_LINEHEIGHT = 8
+local CONST_ARRAYNAMES = {"note", "vel", "oct", "off_a", "off_b", "gate", "slide"}
+local CONST_ARRDIS = {"Deg", "Vel", "Oct", "M-A", "M-B", "Gat", "Sld"}
+local CONST_BOUNDS = {{1, 7}, {1, 8}, {1, 8}, {-12, 12}, {-12, 12}, {0, 0}, {0, 0}}
+
 -- globals
-local lat = lib_lat:new{}
-local debugflag = true
-local tab, note_len = 1/16, redraw_loop, screen_dirty
+-- general stuff
+local ALTKEY = false
+local redraw_loop
+-- sequencer stuff
+local seqlat = lib_lat:new{}
 local note_table = {}
+local prev_note_buf = {}
 local seq_table = {}
 local note_const = {}
 local cur_scale = {}
-local scale_name, scale_root
+local notetab = 1
+local cursor_idx = 1
+-- formatting stuff
+debugscriptflag = true
+-- scale stuff
+local scale_name
+local scale_root
 
 -- various utility functions (move to other file)
 function data_to_string(item)
@@ -30,11 +50,13 @@ function data_to_string(item)
   if type(item) == "table" then
     ret = ret .. "{"
     for k, v in pairs(item) do
-      ret = ret .. k .. ": " .. data_to_string(v) .. ", "
+      ret = ret .. k .. ": " .. data_to_string(v) .. " "
     end
-    ret = ret .. "}, "
+    ret = ret .. "} "
   elseif type(item) == "boolean" then
     ret = item and "true" or "false"
+  elseif type(item) == "function" then
+    ret = "--function--"
   else
     ret = "" .. item
   end
@@ -42,7 +64,113 @@ function data_to_string(item)
 end
 
 function printdeb(string)
-  if debugflag then print(string) end
+  if debugscriptflag then print(string) end
+end
+
+function format_note_array(arr)
+  local ret = {}
+  for k, v in ipairs(arr) do
+    local notenm = ""
+    if params:get(n("display_as_notes")) then
+      notenm = musicutil.NOTE_NAMES[from_degree_to_note(v, true)]
+    else
+      notenm = v
+    end
+    ret[k] = notenm
+  end
+  return ret
+end
+
+function draw_note_array(bx, by, idx, selected, array)
+  -- vars
+  local arrlen = #array
+  local x = bx
+  local y = by
+  local lx = 0
+  local ly = 0
+  local doffset = 0
+  local notes_to_draw = {}
+  local idxpos = -1
+  local selectedpos = -1
+
+  -- form array
+  if arrlen > 8 then
+    local following = selected == -1 and idx or selected
+    if following < 4 then
+      doffset = 0
+    elseif following > (arrlen - 4) then
+      doffset = arrlen - 8
+    else
+      doffset = following - 4
+    end
+    notes_to_draw = {table.unpack(array, doffset + 1, doffset + 8)}
+  else
+    notes_to_draw = array
+  end
+
+  -- calc cursor pos
+  if idx > doffset and idx < doffset + 9 then
+    idxpos = idx - doffset
+  end
+  if selected ~= -1 then
+    selectedpos = selected - doffset
+  end
+
+  local degrees = {}
+  local drawlines = false
+  local isarray = false
+  local gates = {}
+  if type(array[1]) == "number" then
+    degrees = ismainnotes and format_note_array(notes_to_draw) or notes_to_draw
+    drawlines = true
+  elseif type(array[1]) == "boolean" then
+    for k, v in ipairs(notes_to_draw) do
+      degrees[k] = v and "X" or "0"
+    end
+  else
+    isarray = true
+    for k, v in ipairs(notes_to_draw) do
+      degrees[k] = v[1]
+      gates[k] = v[2]
+    end
+    drawlines = true
+  end
+
+  -- draw stuff
+  for k, v in ipairs(degrees) do
+    local off_y = 0
+    local off_y_n = 0
+    if drawlines then
+      if isarray then
+        off_y = v
+        off_y_n = degrees[util.wrap(k + 1, 1, #degrees)]
+      else
+        off_y = notes_to_draw[k]
+        off_y_n = notes_to_draw[util.wrap(k + 1, 1, #notes_to_draw)]
+      end
+    end
+    screen.move(x, y - off_y)
+    if isarray then
+      if gates[k] then
+        v = v .. "P"
+      end
+    end
+    local width = screen.text_extents(v)
+    if k ~= #degrees and drawlines then
+      screen.level(5)
+      screen.line_width(1)
+      screen.line(x + 12, y - off_y_n)
+      screen.stroke()
+    end
+    screen.move(x, y - off_y)
+    screen.level(k ~= selectedpos and 0 or 1)
+    screen.rect(x - (width + 2) / 2, y - 4-off_y, width + 2, 8)
+    screen.fill()
+    screen.move(x, y - off_y + 2)
+    screen.level(k ~= idxpos and 4 or 15)
+    screen.text_center(v)
+    x = x + 12
+  end
 end
 
 -- logic and such
@@ -56,14 +184,131 @@ function init()
   init_scale("Phrygian", note_const.note)
   init_tables()
   init_seqs()
+  init_prev_bufs()
+  -- init some screen stuff
+  screen.level(15)
+  screen.aa(0)
+  screen.line_width(1)
+  screen.font_size(CONST_LINEHEIGHT)
+  screen.font_face(1)
+  -- add params
+  init_params()
   -- start lattice
-  lat:start()
-  -- set screen flag
-  screen_dirty = true
-  -- start draw loop
-  redraw_loop = metro.init(redraw, 0.5, -1)
+  seqlat:start()
+  -- set up encoder stuff
+  norns.enc.sens(2, 3)
+  -- start redraw loop
+  redraw_loop = metro.init(redraw_screen, 0.25, - 1)
   redraw_loop:start()
+  -- init done!
   printdeb("init done")
+end
+
+function n(name)
+  return "hs_ohoneoh_seq_" .. name
+end
+
+function init_params()
+
+  -- settings
+  params:add_separator(n("settings"), "Config")
+  params:add_option(n("display_as_notes"), "Note display", {true, false}, false)
+  params:add_number(n("vel_deviation"), "Velocity deviation", 0, 127, 16)
+
+  -- scale stuff
+  params:add_separator(n("scale"), "Scale")
+  params:add_option(n("scale_name"), "Scale name", musicutil.SCALES, 1)
+  params:set_action(n("scale_name"),
+    function(name)
+      init_scale(name, scale_root)
+    end
+  )
+  params:add_option(n("root_note"), "Root note", musicutil.NOTE_NAMES, 1)
+  params:set_action(n("root_note"),
+    function(note)
+      init_scale(scale_name, tab.key(musicutil.NOTE_NAMES, note))
+    end
+  )
+
+  -- sequence lengths
+  params:set_separator(n("seq_len"), "Sequence lengths")
+  params:add_number(n("note_len"), "Note len", 1, 64, 8)
+  params:set_action(n("note_len"), set_update_len("note"))
+  params:add_number(n("vel_len"), "Velocity len", 1, 64, 8)
+  params:set_action(n("vel_len"), set_update_len("vel"))
+  params:add_number(n("oct_len"), "Octave len", 1, 64, 8)
+  params:set_action(n("oct_len"), set_update_len("oct"))
+  params:add_number(n("off_a_len"), "Offset A len", 1, 64, 8)
+  params:set_action(n("off_a_len"), set_update_len("off_a"))
+  params:add_number(n("off_b_len"), "Offset B len", 1, 64, 8)
+  params:set_action(n("off_b_len"), set_update_len("off_b"))
+  params:add_number(n("slide_len"), "Slide len", 1, 64, 8)
+  params:set_action(n("slide_len"), set_update_len("slide"))
+  params:add_number(n("gate_len"), "Gate len", 1, 64, 8)
+  params:set_action(n("gate_len"), set_update_len("gate"))
+
+  -- sequence divisions
+  params:add_separator(n("seq_dev"), "Sequence pulse divisions")
+  params:add_option(n("note_div"), "Note div", CONST_NOTELEN, 8)
+  params:set_action(n("note_div"), set_update_division("note"))
+  params:add_option(n("vel_div"), "Velocity div", CONST_NOTELEN, 8)
+  params:set_action(n("vel_div"), set_update_division("vel"))
+  params:add_option(n("oct_div"), "Octave div", CONST_NOTELEN, 8)
+  params:set_action(n("oct_div"), set_update_division("oct"))
+  params:add_option(n("off_a_div"), "Offset A div", CONST_NOTELEN, 8)
+  params:set_action(n("off_a_div"), set_update_division("off_a"))
+  params:add_option(n("off_b_div"), "Offset B div", CONST_NOTELEN, 8)
+  params:set_action(n("off_b_div"), set_update_division("off_b"))
+  params:add_option(n("slide_div"), "Slide div", CONST_NOTELEN, 8)
+  params:set_action(n("slide_div"), set_update_division("slide"))
+  params:add_option(n("gate_div"), "Gate div", CONST_NOTELEN, 8)
+  params:set_action(n("gate_div"), set_update_division("gate"))
+
+  params.action_write = function(filename,name,number)
+    local formatted_tables = {}
+    for k, v in pairs(note_table) do
+      formatted_tables[k] = {}
+      for kk, vv in ipairs(v.data) do
+        table.insert(formatted_tables[k], vv)
+      end
+    end
+    tab.write(formatted_tables, norns.state.data .. number .. name .. ".txt")
+    printdeb("finished writing '"..filename.."' as '"..name.."' and PSET number: "..number)
+  end
+
+  params.action_read = function(filename,silent,number)
+    local formatted_tables = tab.load(norns.state.data .. number .. name .. ".txt")
+    for k, v in pairs(formatted_tables) do
+      note_table[k]:settable(v)
+    end
+    printdeb("finished reading '"..filename.."' as PSET number: "..number)
+  end
+
+  params.action_delete = function(filename,name,number)
+    norns.system_cmd("rm -rf " .. norns.state.data .. number .. name .. ".txt")
+    printdeb("finished deleting '"..filename.."' as '"..name.."' and PSET number: "..number)
+  end
+
+end
+
+function set_update_len(parname)
+  return function(val)
+    local delta = #note_table[parname].data - val
+    shrink_seq(parname, delta)
+  end
+end
+
+
+function set_update_division(parname)
+  return function(val)
+      seq_table[parname]:set_division(val)
+  end
+end
+
+function init_prev_bufs()
+  for k, v in pairs(note_const) do
+    prev_note_buf[k] = {}
+  end
 end
 
 function init_scale(name, root)
@@ -87,56 +332,56 @@ end
 
 function init_tables()
   note_table = {}
-  note_table.note = s{1,2,3,4,5,6,7,8}
-  note_table.vel = s{127, 80}
-  note_table.oct = s{3, 3, 4, 3}
-  note_table.off_a = s{{0, false}, {5, false}, {3, false}, {12, false}}
-  note_table.off_b = s{{0, false}}
-  note_table.gate = s{true}
-  note_table.slide = s{false}
+  note_table.note = s{1, 2, 3, 4, 5, 6, 7, 6}
+  note_table.vel = s{3, 7, 3, 5, 3, 4, 3, 7}
+  note_table.oct = s{3, 3, 4, 3, 3, 2, 3, 3}
+  note_table.off_a = s{{0, false}, {0, false}, {0, false}, {0, false}, {0, false}, {0, false}, {0, false}, {0, false}}
+  note_table.off_b = s{{0, false}, {0, false}, {0, false}, {0, false}, {0, false}, {0, false}, {0, false}, {0, false}}
+  note_table.gate = s{true, true, false, true, true, false, true, true}
+  note_table.slide = s{false, false, false, false, false, false, false, true}
   printdeb("init sequins: " .. data_to_string(note_table))
 end
 
 function init_seqs()
-  seq_table.note = lat:new_sprocket{
-    action = set_note(),
-    division = 1/4,
+  seq_table.note = seqlat:new_sprocket{
+    action = set_note,
+    division = 1 / 4,
     enabled = true,
     order = 1
   }
-  seq_table.vel = lat:new_sprocket{
-    action = set_vel(),
-    division = 1/4,
+  seq_table.vel = seqlat:new_sprocket{
+    action = set_vel,
+    division = 1 / 4,
     enabled = true,
     order = 1
   }
-  seq_table.oct = lat:new_sprocket{
-    action = set_oct(),
-    division = 1/4,
+  seq_table.oct = seqlat:new_sprocket{
+    action = set_oct,
+    division = 1 / 4,
     enabled = true,
     order = 1
   }
-  seq_table.off_a = lat:new_sprocket{
-    action = set_a(),
-    division = 1/4,
+  seq_table.off_a = seqlat:new_sprocket{
+    action = set_a,
+    division = 1 / 4,
     enabled = true,
     order = 1
   }
-  seq_table.off_b = lat:new_sprocket{
-    action = set_b(),
-    division = 1/4,
+  seq_table.off_b = seqlat:new_sprocket{
+    action = set_b,
+    division = 1 / 4,
     enabled = true,
     order = 1
   }
-  seq_table.slide = lat:new_sprocket{
-    action = set_slide(),
-    division = 1/4,
+  seq_table.slide = seqlat:new_sprocket{
+    action = set_slide,
+    division = 1 / 4,
     enabled = true,
     order = 1
   }
-  seq_table.gate = lat:new_sprocket{
-    action = play_note(),
-    division = 1/4,
+  seq_table.gate = seqlat:new_sprocket{
+    action = play_note,
+    division = 1 / 4,
     enabled = true,
     order = 2
   }
@@ -148,11 +393,10 @@ end
 
 function set_note()
   note_const.note = note_table.note()
-  printdeb("set note " .. note_const.note)
 end
 
 function set_vel()
-  note_const.vel = note_table.vel()
+  note_const.vel = util.clamp(note_table.vel() * 16, 0, 127)
 end
 
 function set_oct()
@@ -167,36 +411,45 @@ function set_b()
   note_const.off_b = note_table.off_b()
 end
 
--- implement ties
 function play_note()
-  printdeb("playing note")
   local gate = note_table.gate()
   if gate then
-    local note = {}
     local poly_a = note_const.off_a[2]
     local poly_b = note_const.off_b[2]
-    note[1] = note_const.note
-    note[2] = note_const.off_a[1]
-    note[3] = note_const.off_b[1]
+    local root = from_degree_to_note(note_const.note, false)
+    local finalnote = root
+    local off_a = note_const.off_a[1]
+    local off_b = note_const.off_b[1]
     if not poly_a then
-      note[1] = note[1] + note[2]
+      finalnote = finalnote + off_a
     else
-      format_and_play_note(note[2], velocity_dev, note_const.oct, note_const.vel)
+      format_and_play_note(root + off_a, params:get(n("vel_deviation")), note_const.oct, note_const.vel)
     end
     if not poly_b then
-      note[1] = note[1] + note[3]
+      finalnote = finalnote + off_b
     else
-      format_and_play_note(note[3], velocity_dev, note_const.oct, note_const.vel)
+      format_and_play_note(root + off_b, params:get(n("vel_deviation")), note_const.oct, note_const.vel)
     end
-    format_and_play_note(note[1], 0, note_const.oct, note_const.vel)
+    format_and_play_note(finalnote, 0, note_const.oct, note_const.vel, note_const.slide)
   end
-  screen_dirty = true
 end
 
-function format_and_play_note(note, vdev, oct, vel)
-  local vd = math.min(127, math.abs(math.random(-vdev, vdev) + vel))
+function from_degree_to_note(idegree, purgeoct)
+  local degree = idegree - 1
+  local note_number = #cur_scale
+  local degree_pure = math.fmod(degree, note_number)
+  local degree_oct = 0
+  if not purgeoct then
+    local degree_oct = (degree - degree_pure) /  / note_number
+  end
+  return cur_scale[degree_pure + 1] + degree_oct * 12
+end
+
+function format_and_play_note(note, vdev, oct, vel, slide)
+  local vd = math.min(127, math.max(math.random(-vdev, vdev) + vel, 0))
   local nnote = scale_quant(note) + oct
-  play_note_engine(nnote, vd, 1/16)
+  local isslide = slide and 2 or 1
+  play_note_engine(nnote, vd, params:get(n("gate_div")) * slide)
 end
 
 function scale_quant(note)
@@ -206,38 +459,165 @@ function scale_quant(note)
 end
 
 function play_note_engine(note, vel, note_time)
-  printdeb(note .. " " .. vel .. " " .. note_time)
+  --printdeb("note: " .. note .. " " .. vel .. " " .. note_time)
   player = params:lookup_param("voice_id"):get_player()
-  player:play_note(note, vel/128, note_time)
+  player:play_note(note, vel / 128, note_time)
+end
+
+function shrink_seq(name, num)
+  local seq = note_table[name].data
+  if num > 0 then
+    for x = 0, num - 1 do
+      local val
+      if type(seq[1]) == "table" then
+        val = {}
+        for k, v in pairs(seq[1]) do
+          val[k] = v
+        end
+      else
+        val = seq[1]
+      end
+      if #prev_note_buf[name] > 0 then
+        val = table.remove(prev_note_buf[name])
+      end
+      table.insert(seq, val)
+    end
+  else
+    for x = 0, math.abs(num) - 1 do
+      if #seq > 1 then
+        table.insert(prev_note_buf[name], table.remove(seq))
+      end
+    end
+  end
+  note_table[name]:settable(seq)
+  tab.print(note_table[name].data)
 end
 
 -- control logic
-function key(n,z)
-  if n == 3 and z == 1 then
-    lat:toggle()
+function key(n, z)
+  if n == 1 and z == 1 then
+    ALTKEY = true
   end
+  if n == 1 and z == 0 then
+    ALTKEY = false
+  end
+  if n == 2 and z == 1 and ALTKEY then
+    seqlat:toggle()
+  end
+  if n == 3 and z == 1 and ALTKEY then
+    seqlat:pulse()
+  end
+  redraw_screen()
 end
 
-function redraw(stage)
-  screen_dirty = true
-  if screen_dirty then
-    local ofs = 20
-    screen.clear()
-    screen.move(10, 8)
-    screen.text(lat.transport)
-    screen.move(10, 14)
-    screen.text(lat.enabled and "yes" or "no")
-    for k, v in pairs(note_const) do
-      screen.move(10, ofs)
-      screen.text(k .. " " .. data_to_string(v))
-      ofs = ofs + 6
+function enc(n, d)
+  if n == 1 then
+    if ALTKEY then
+      local arrname = CONST_ARRAYNAMES[notetab]
+      params:delta(n(arrname .. "_len"), d)
+    else
+      notetab = util.wrap(notetab + d, 1, #CONST_ARRAYNAMES)
     end
-    screen_dirty = false
-    screen.update()
   end
+  if n == 2 then
+    if ALTKEY then
+      local arrname = CONST_ARRAYNAMES[notetab]
+      local curdiv = tab.key(CONST_NOTELEN, seq_table[arrname].division)
+      params:set(n(arrname .. "_div"), CONST_NOTELEN[util.clamp(curdiv + d, 1, #CONST_NOTELEN)])
+    else
+      cursor_idx = cursor_idx + d
+    end
+  end
+  if n == 3 then
+    local arrname = CONST_ARRAYNAMES[notetab]
+    local idx = util.wrap(cursor_idx, 1, #note_table[arrname])
+    if type(note_table[arrname][idx]) == "number" then
+      note_table[arrname][idx] = util.wrap(note_table[arrname][idx] + d, CONST_BOUNDS[notetab][1], CONST_BOUNDS[notetab][2])
+    elseif type(note_table[arrname][idx]) == "boolean" then
+      note_table[arrname][idx] = not note_table[arrname][idx]
+    else
+      if ALTKEY then
+        note_table[arrname][idx][2] = not note_table[arrname][idx][2]
+      else
+        note_table[arrname][idx][1] = util.wrap(
+          note_table[arrname][idx][1] + d,
+          CONST_BOUNDS[notetab][1],
+          CONST_BOUNDS[notetab][2]
+        )
+      end
+    end
+  end
+  redraw_screen()
 end
 
--- start redraw loop (for some reason doesn't work in init function)
--- the redraw loop somehow works here but not when started within the init function
--- redraw_loop = metro.init(redraw, 0.5, -1)
--- redraw_loop:start()
+function redraw_screen()
+  redraw()
+end
+
+-- norns screen is 128 by 64 pixels
+function redraw()
+  screen.clear()
+  local todraw = {}
+  local arraynames = #CONST_ARRAYNAMES
+  if notetab == 1 then
+    todraw = {{false, 0}, {CONST_ARRAYNAMES[1], 1}, {CONST_ARRAYNAMES[2], 2}}
+  elseif notetab == arraynames then
+    todraw = {
+      {CONST_ARRAYNAMES[arraynames - 1], arraynames - 1},
+      {CONST_ARRAYNAMES[arraynames], arraynames},
+      {false, 0}
+    }
+  else
+    todraw = {
+      {CONST_ARRAYNAMES[notetab - 1], notetab - 1},
+      {CONST_ARRAYNAMES[notetab], notetab},
+      {CONST_ARRAYNAMES[notetab + 1], notetab + 1}
+    }
+  end
+
+  local selector = 0
+  for k, v in ipairs(todraw) do
+    if v[1] ~= false then
+      screen.move(5, k * 18)
+      screen.level(selector == 1 and 10 or 1)
+      screen.text(CONST_ARRDIS[v[2]] .. ":")
+      draw_note_array(
+        26,
+        k * 18,
+        note_table[v[1]].ix,
+        util.wrap(cursor_idx, 1, #note_table[v[1]]),
+        note_table[v[1]],
+        v[2] == 1
+      )
+    end
+    selector = selector + 1
+  end
+
+  if ALTKEY then
+    local lenstr = "alt/" .. #note_table[todraw[2][1]]
+    local pulstr = (seqlat.enabled and "stop" or "play") .. "/" .. seq_table[todraw[2][1]].division
+    local synstr = "pul/" .. (type(note_table[todraw[2][1]][0]) == "table" and "poly" or "----")
+    screen.move(124, 8)
+    screen.rect(124, 8, - (screen.text_extents(lenstr) + 4), 12)
+    screen.level(0)
+    screen.fill()
+    screen.level(15)
+    screen.move(122, 10)
+    screen.text_right(lenstr)
+    screen.move(4, 61)
+    screen.rect(4, 61, screen.text_extents(pulstr) + 4, 12)
+    screen.level(0)
+    screen.fill()
+    screen.level(15)
+    screen.move(6, 63)
+    screen.text(pulstr)
+    screen.move(120, 61)
+    screen.rect(120, 61, screen.text_extents(synstr) + 4, 12)
+    screen.level(0)
+    screen.fill()
+    screen.level(15)
+    screen.move(122, 63)
+    screen.text_right(synstr)
+  end
+  screen.update()
+end

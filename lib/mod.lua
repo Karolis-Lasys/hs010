@@ -38,7 +38,7 @@ local function save_params_to_file()
   end, tostring(os.date('%Y%m%d_%H_%M')), "Enter preset name")
 end
 
-local function add_hs010_params(i)
+local function add_hs010_params(reg)
     local par_list = hsparams.ret_list()
     params:add_group(n("group"), "hs010", #par_list + 8)
     params:hide(n("group"))
@@ -76,6 +76,7 @@ local function add_hs010_params(i)
           return tostring(vformatter(i:get()))
         end
       )
+      table.insert(parids, id)
       params:set_action(id, function(param)
         osc.send({ "localhost", 57120 }, "/hs010/" .. val[1], { vformatter(param) }) -- send param value
       end)
@@ -98,6 +99,7 @@ end
 
 function add_hs010_player()
     local player = {
+      parids = {}
     }
 
     function player:active()
@@ -125,7 +127,8 @@ function add_hs010_player()
         return {
             name = "hs010",
             supports_bend = false,
-            supports_slew = false
+            supports_slew = false,
+            params = parids
         }
     end
 
@@ -149,7 +152,7 @@ function add_hs010_player()
     end
 
     function player:add_params()
-        add_hs010_params()
+        add_hs010_params(self)
         params:bang()
     end
 
