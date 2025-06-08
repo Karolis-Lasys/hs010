@@ -19,8 +19,9 @@ It has been expanded with:
   3 - 6 voice poly  
   While in mono or unison mode the *mono mode* option changes mono behaviour from legato, always retrigger or always glide.
 - presets:
-  You can load and save presets independently from norns .psets  
-Along these two there's also a param refresh switch that resends the currently on screen params to the engine and a midi panic switch.
+  You can load and save presets independently from norns .psets
+
+Along these two there's also a param refresh button that resends the currently on screen params to the engine and a midi panic button.
 
 The sequencer is, as mentioned before, inspired by roullete by fors and consists of 7 independent lanes:
 - pitch (7 scale degrees)  
