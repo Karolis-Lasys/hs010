@@ -23,11 +23,11 @@ It has been expanded with:
 Along these two there's also a param refresh switch that resends the currently on screen params to the engine and a midi panic switch.
 
 The sequencer is, as mentioned before, inspired by roullete by fors and consists of 7 independent lanes:
-- pitch (scale degrees)  
+- pitch (7 scale degrees)  
 - velocity (8 levels)  
 - Octave (8 octaves)  
-- Offset A  
-- Offset B  
+- Offset A (+- 12 semitones)
+- Offset B (+- 12 semitones)
 - Gate  
 - Slide  
 
