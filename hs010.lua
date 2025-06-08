@@ -39,8 +39,8 @@ local note_const = {}
 local cur_scale = {}
 local notetab = 1
 local cursor_idx = 1
--- formatting stuff
-debugscriptflag = true
+-- debugging stuff
+debugscriptflag = false
 -- scale stuff
 local scale_name
 local scale_root
@@ -188,7 +188,6 @@ function init()
   redraw_loop = metro.init(redraw_screen, 0.25, - 1)
   redraw_loop:start()
   -- init done!
-  printdeb("init done")
 end
 
 function n(name)
@@ -200,7 +199,6 @@ function reset_seqs()
     note_table[k]:reset()
   end
   set_slide()
-  print("RESET!")
 end
 
 function init_params()
@@ -272,8 +270,6 @@ function init_params()
         table.insert(formatted_tables[k], vv)
       end
     end
-    tab.print(formatted_tables)
-    print(savepath)
     tab.save(formatted_tables, savepath)
   end
 
@@ -313,7 +309,6 @@ function init_scale(name, root)
   scale_name = name
   scale_root = math.fmod(root - 1, 12)
   cur_scale = musicutil.generate_scale(scale_root, name, 1)
-  printdeb("init scale " .. name)
 end
 
 function init_const()
@@ -325,7 +320,6 @@ function init_const()
   note_const.off_b = {0, false}
   note_const.slide = false
   note_const.gate = true
-  printdeb("init const: " .. data_to_string(note_const))
 end
 
 function init_tables()
@@ -337,7 +331,6 @@ function init_tables()
   note_table.off_b = s{{0, false}, {0, false}, {0, false}, {0, false}, {0, false}, {0, false}, {0, false}, {0, false}}
   note_table.gate = s{true, true, false, true, true, false, true, true}
   note_table.slide = s{false, false, false, false, false, false, false, true}
-  printdeb("init sequins: " .. data_to_string(note_table))
 end
 
 function init_seqs()
