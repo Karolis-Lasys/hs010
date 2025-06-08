@@ -38,7 +38,6 @@ Polyphonia {
 		arg note, vel, forceslide = false;
 		var freq = note.midicps;
 		var monoglide = 0;
-		note_list[active_voice].postln;
 		switch(mono_mode.asInteger,
 			0, {
 				if((note_list[active_voice][0] != 0) || forceslide, {

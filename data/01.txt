@@ -1,0 +1,141 @@
+return {
+-- Table: {1}
+{
+   ["note"]={2},
+   ["off_a"]={3},
+   ["oct"]={4},
+   ["vel"]={5},
+   ["slide"]={6},
+   ["off_b"]={7},
+   ["gate"]={8},
+},
+-- Table: {2}
+{
+   1,
+   3,
+   5,
+   4,
+},
+-- Table: {3}
+{
+   {9},
+   {10},
+   {11},
+   {12},
+},
+-- Table: {4}
+{
+   4,
+   5,
+   5,
+   4,
+   6,
+   5,
+   6,
+},
+-- Table: {5}
+{
+   3,
+   6,
+   3,
+   5,
+   3,
+   4,
+   4,
+   7,
+},
+-- Table: {6}
+{
+   false,
+   false,
+   false,
+   true,
+   false,
+   true,
+   false,
+   false,
+   true,
+   false,
+},
+-- Table: {7}
+{
+   {13},
+   {14},
+   {15},
+   {16},
+   {17},
+   {18},
+   {19},
+   {20},
+},
+-- Table: {8}
+{
+   true,
+   true,
+   true,
+   false,
+   true,
+   true,
+   true,
+},
+-- Table: {9}
+{
+   0,
+   false,
+},
+-- Table: {10}
+{
+   2,
+   false,
+},
+-- Table: {11}
+{
+   5,
+   false,
+},
+-- Table: {12}
+{
+   -3,
+   false,
+},
+-- Table: {13}
+{
+   0,
+   false,
+},
+-- Table: {14}
+{
+   0,
+   false,
+},
+-- Table: {15}
+{
+   0,
+   false,
+},
+-- Table: {16}
+{
+   0,
+   false,
+},
+-- Table: {17}
+{
+   0,
+   false,
+},
+-- Table: {18}
+{
+   0,
+   false,
+},
+-- Table: {19}
+{
+   0,
+   false,
+},
+-- Table: {20}
+{
+   0,
+   false,
+},
+}
