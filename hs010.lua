@@ -18,6 +18,7 @@ local player
 
 -- consts
 local CONST_NOTELEN = {1 / 64, 1 / 32, 1 / 24, 1 / 16, 1 / 12, 1 / 8, 1 / 6, 1 / 4, 1 / 3, 1 / 2, 3 / 4, 1, 2, 3, 4, 6, 8, 12, 16, 24, 32}
+local CONST_NOTELEN_STR = {"1/64", "1/32", "1/24", "1/16", "1/12", "1/8", "1/6", "1/4", "1/3", "1/2", "3/4", "1", "2", "3", "4", "6", "8", "12", "16", "24", "32"}
 local CONST_W = 128
 local CONST_H = 64
 local CONST_LINEHEIGHT = 8
@@ -67,21 +68,7 @@ function printdeb(string)
   if debugscriptflag then print(string) end
 end
 
-function format_note_array(arr)
-  local ret = {}
-  for k, v in ipairs(arr) do
-    local notenm = ""
-    if params:get(n("display_as_notes")) then
-      notenm = musicutil.NOTE_NAMES[from_degree_to_note(v, true)]
-    else
-      notenm = v
-    end
-    ret[k] = notenm
-  end
-  return ret
-end
-
-function draw_note_array(bx, by, idx, selected, array)
+function draw_note_array(bx, by, idx, selected, array, ismainnotes)
   -- vars
   local arrlen = #array
   local x = bx
@@ -121,7 +108,7 @@ function draw_note_array(bx, by, idx, selected, array)
   local isarray = false
   local gates = {}
   if type(array[1]) == "number" then
-    degrees = ismainnotes and format_note_array(notes_to_draw) or notes_to_draw
+    degrees = notes_to_draw
     drawlines = true
   elseif type(array[1]) == "boolean" then
     for k, v in ipairs(notes_to_draw) do
@@ -181,7 +168,7 @@ function init()
   nb:add_player_params()
   -- init stuff
   init_const()
-  init_scale("Phrygian", note_const.note)
+  init_scale("Phrygian", 1)
   init_tables()
   init_seqs()
   init_prev_bufs()
@@ -208,30 +195,38 @@ function n(name)
   return "hs_ohoneoh_seq_" .. name
 end
 
+function reset_seqs()
+  for k, _ in pairs(note_table) do
+    note_table[k]:reset()
+  end
+  set_slide()
+  print("RESET!")
+end
+
 function init_params()
 
-  -- settings
-  params:add_separator(n("settings"), "Config")
-  params:add_option(n("display_as_notes"), "Note display", {true, false}, false)
-  params:add_number(n("vel_deviation"), "Velocity deviation", 0, 127, 16)
+  local scalenames = {}
+  for k,v in ipairs(musicutil.SCALES) do
+    table.insert(scalenames, v.name)
+  end
 
   -- scale stuff
   params:add_separator(n("scale"), "Scale")
-  params:add_option(n("scale_name"), "Scale name", musicutil.SCALES, 1)
+  params:add_option(n("scale_name"), "Scale name", scalenames, 1)
   params:set_action(n("scale_name"),
     function(name)
-      init_scale(name, scale_root)
+      init_scale(name, scale_root + 1)
     end
   )
   params:add_option(n("root_note"), "Root note", musicutil.NOTE_NAMES, 1)
   params:set_action(n("root_note"),
-    function(note)
-      init_scale(scale_name, tab.key(musicutil.NOTE_NAMES, note))
+    function(notename)
+      init_scale(scale_name, notename)
     end
   )
 
   -- sequence lengths
-  params:set_separator(n("seq_len"), "Sequence lengths")
+  params:add_separator(n("seq_len"), "Sequence lengths")
   params:add_number(n("note_len"), "Note len", 1, 64, 8)
   params:set_action(n("note_len"), set_update_len("note"))
   params:add_number(n("vel_len"), "Velocity len", 1, 64, 8)
@@ -249,59 +244,62 @@ function init_params()
 
   -- sequence divisions
   params:add_separator(n("seq_dev"), "Sequence pulse divisions")
-  params:add_option(n("note_div"), "Note div", CONST_NOTELEN, 8)
+  params:add_option(n("note_div"), "Note div", CONST_NOTELEN_STR, 8)
   params:set_action(n("note_div"), set_update_division("note"))
-  params:add_option(n("vel_div"), "Velocity div", CONST_NOTELEN, 8)
+  params:add_option(n("vel_div"), "Velocity div", CONST_NOTELEN_STR, 8)
   params:set_action(n("vel_div"), set_update_division("vel"))
-  params:add_option(n("oct_div"), "Octave div", CONST_NOTELEN, 8)
+  params:add_option(n("oct_div"), "Octave div", CONST_NOTELEN_STR, 8)
   params:set_action(n("oct_div"), set_update_division("oct"))
-  params:add_option(n("off_a_div"), "Offset A div", CONST_NOTELEN, 8)
+  params:add_option(n("off_a_div"), "Offset A div", CONST_NOTELEN_STR, 8)
   params:set_action(n("off_a_div"), set_update_division("off_a"))
-  params:add_option(n("off_b_div"), "Offset B div", CONST_NOTELEN, 8)
+  params:add_option(n("off_b_div"), "Offset B div", CONST_NOTELEN_STR, 8)
   params:set_action(n("off_b_div"), set_update_division("off_b"))
-  params:add_option(n("slide_div"), "Slide div", CONST_NOTELEN, 8)
+  params:add_option(n("slide_div"), "Slide div", CONST_NOTELEN_STR, 8)
   params:set_action(n("slide_div"), set_update_division("slide"))
-  params:add_option(n("gate_div"), "Gate div", CONST_NOTELEN, 8)
+  params:add_option(n("gate_div"), "Gate div", CONST_NOTELEN_STR, 8)
   params:set_action(n("gate_div"), set_update_division("gate"))
 
-  params.action_write = function(filename,name,number)
+  -- misc stuff
+  params:add_separator(n("settings"), "Misc")
+  params:add_number(n("vel_deviation"), "Velocity deviation", 0, 127, 16)
+
+  params.action_write = function(psetfilename,psetname,psetnumber)
     local formatted_tables = {}
+    local savepath = norns.state.data .. psetnumber .. ".txt"
     for k, v in pairs(note_table) do
       formatted_tables[k] = {}
       for kk, vv in ipairs(v.data) do
         table.insert(formatted_tables[k], vv)
       end
     end
-    tab.write(formatted_tables, norns.state.data .. number .. name .. ".txt")
-    printdeb("finished writing '"..filename.."' as '"..name.."' and PSET number: "..number)
+    tab.print(formatted_tables)
+    print(savepath)
+    tab.save(formatted_tables, savepath)
   end
 
-  params.action_read = function(filename,silent,number)
-    local formatted_tables = tab.load(norns.state.data .. number .. name .. ".txt")
+  params.action_read = function(psetfilename,psetsilent,psetnumber)
+    local formatted_tables = tab.load(norns.state.data .. psetnumber .. ".txt")
     for k, v in pairs(formatted_tables) do
       note_table[k]:settable(v)
     end
-    printdeb("finished reading '"..filename.."' as PSET number: "..number)
   end
 
-  params.action_delete = function(filename,name,number)
-    norns.system_cmd("rm -rf " .. norns.state.data .. number .. name .. ".txt")
-    printdeb("finished deleting '"..filename.."' as '"..name.."' and PSET number: "..number)
+  params.action_delete = function(psetfilename,psetname,psetnumber)
+    norns.system_cmd("rm -rf " .. norns.state.data .. psetnumber .. ".txt")
   end
 
 end
 
 function set_update_len(parname)
   return function(val)
-    local delta = #note_table[parname].data - val
-    shrink_seq(parname, delta)
+    shrink_seq(parname, val)
   end
 end
 
 
 function set_update_division(parname)
   return function(val)
-      seq_table[parname]:set_division(val)
+      seq_table[parname]:set_division(CONST_NOTELEN[val])
   end
 end
 
@@ -313,9 +311,9 @@ end
 
 function init_scale(name, root)
   scale_name = name
-  scale_root = math.fmod(root, 12)
-  cur_scale = musicutil.generate_scale(root, name, 1)
-  printdeb("init scale" .. name)
+  scale_root = math.fmod(root - 1, 12)
+  cur_scale = musicutil.generate_scale(scale_root, name, 1)
+  printdeb("init scale " .. name)
 end
 
 function init_const()
@@ -385,6 +383,7 @@ function init_seqs()
     enabled = true,
     order = 2
   }
+  set_slide()
 end
 
 function set_slide()
@@ -440,7 +439,7 @@ function from_degree_to_note(idegree, purgeoct)
   local degree_pure = math.fmod(degree, note_number)
   local degree_oct = 0
   if not purgeoct then
-    local degree_oct = (degree - degree_pure) /  / note_number
+    local degree_oct = (degree - degree_pure) // note_number
   end
   return cur_scale[degree_pure + 1] + degree_oct * 12
 end
@@ -448,8 +447,7 @@ end
 function format_and_play_note(note, vdev, oct, vel, slide)
   local vd = math.min(127, math.max(math.random(-vdev, vdev) + vel, 0))
   local nnote = scale_quant(note) + oct
-  local isslide = slide and 2 or 1
-  play_note_engine(nnote, vd, params:get(n("gate_div")) * slide)
+  play_note_engine(nnote, vd, CONST_NOTELEN[params:get(n("gate_div"))], slide)
 end
 
 function scale_quant(note)
@@ -458,14 +456,18 @@ function scale_quant(note)
   return musicutil.snap_note_to_array(fnote, cur_scale) + oct
 end
 
-function play_note_engine(note, vel, note_time)
-  --printdeb("note: " .. note .. " " .. vel .. " " .. note_time)
+function play_note_engine(note, vel, note_time, slide)
   player = params:lookup_param("voice_id"):get_player()
-  player:play_note(note, vel / 128, note_time)
+  if slide then
+    player:note_on(note, vel / 128)
+  else
+    player:play_note(note, vel / 128, note_time)
+  end
 end
 
-function shrink_seq(name, num)
+function shrink_seq(name, newlen)
   local seq = note_table[name].data
+  local num = newlen - tab.count(seq)
   if num > 0 then
     for x = 0, num - 1 do
       local val
@@ -490,28 +492,27 @@ function shrink_seq(name, num)
     end
   end
   note_table[name]:settable(seq)
-  tab.print(note_table[name].data)
 end
 
 -- control logic
-function key(n, z)
-  if n == 1 and z == 1 then
+function key(nn, z)
+  if nn == 1 and z == 1 then
     ALTKEY = true
   end
-  if n == 1 and z == 0 then
+  if nn == 1 and z == 0 then
     ALTKEY = false
   end
-  if n == 2 and z == 1 and ALTKEY then
+  if nn == 2 and z == 1 and ALTKEY then
     seqlat:toggle()
   end
-  if n == 3 and z == 1 and ALTKEY then
-    seqlat:pulse()
+  if nn == 3 and z == 1 and ALTKEY then
+    reset_seqs()
   end
   redraw_screen()
 end
 
-function enc(n, d)
-  if n == 1 then
+function enc(nn, d)
+  if nn == 1 then
     if ALTKEY then
       local arrname = CONST_ARRAYNAMES[notetab]
       params:delta(n(arrname .. "_len"), d)
@@ -519,16 +520,16 @@ function enc(n, d)
       notetab = util.wrap(notetab + d, 1, #CONST_ARRAYNAMES)
     end
   end
-  if n == 2 then
+  if nn == 2 then
     if ALTKEY then
       local arrname = CONST_ARRAYNAMES[notetab]
       local curdiv = tab.key(CONST_NOTELEN, seq_table[arrname].division)
-      params:set(n(arrname .. "_div"), CONST_NOTELEN[util.clamp(curdiv + d, 1, #CONST_NOTELEN)])
+      params:delta(n(arrname .. "_div"), d)
     else
       cursor_idx = cursor_idx + d
     end
   end
-  if n == 3 then
+  if nn == 3 then
     local arrname = CONST_ARRAYNAMES[notetab]
     local idx = util.wrap(cursor_idx, 1, #note_table[arrname])
     if type(note_table[arrname][idx]) == "number" then
@@ -595,8 +596,8 @@ function redraw()
 
   if ALTKEY then
     local lenstr = "alt/" .. #note_table[todraw[2][1]]
-    local pulstr = (seqlat.enabled and "stop" or "play") .. "/" .. seq_table[todraw[2][1]].division
-    local synstr = "pul/" .. (type(note_table[todraw[2][1]][0]) == "table" and "poly" or "----")
+    local pulstr = (seqlat.enabled and "stop" or "play") .. "/" .. CONST_NOTELEN_STR[params:get(n(todraw[2][1] .. "_div"))]
+    local synstr = "rst/" .. (type(note_table[todraw[2][1]][1]) == "table" and "poly" or "----")
     screen.move(124, 8)
     screen.rect(124, 8, - (screen.text_extents(lenstr) + 4), 12)
     screen.level(0)

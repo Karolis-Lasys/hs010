@@ -94,7 +94,7 @@ NB_HS010 {
 			];
 
 			OSCFunc.new({ |msg, time, addr, recvPort|
-				polyman.play(msg[1], msg[2]);
+				polyman.play(msg[1], msg[2], msg[3]);
 			}, "/hs010/note_on");
 
 			OSCFunc.new({ |msg, time, addr, recvPort|

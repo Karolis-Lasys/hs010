@@ -35,12 +35,14 @@ Polyphonia {
 	}
 
 	play {
-		arg note, vel;
+		arg note, vel, forceslide = false;
 		var freq = note.midicps;
 		var monoglide = 0;
+		note_list[active_voice].postln;
+		("note on - " ++ note ++ " slide - " ++ (note_list[active_voice][0] != 0)).postln;
 		switch(mono_mode.asInteger,
 			0, {
-				if(note_list[active_voice][0] != 0, {
+				if((note_list[active_voice][0] != 0) || forceslide, {
 					monoglide = glide_time;
 				}, {
 					monoglide = 0;
@@ -97,12 +99,13 @@ Polyphonia {
 
 	stop {
 		arg note;
-		note_list.do({
-			| val, idx |
-			if (val[0] == note, {
-				this.kill(idx);
-			}, {})
-		});
+		("note off - " ++ note).postln;
+			note_list.do({
+				| val, idx |
+				if (val[0] == note, {
+					this.kill(idx);
+				}, {})
+			});
 	}
 
 	set {

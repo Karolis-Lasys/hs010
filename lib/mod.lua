@@ -76,7 +76,7 @@ local function add_hs010_params(reg)
           return tostring(vformatter(i:get()))
         end
       )
-      table.insert(parids, id)
+      table.insert(reg.parids, id)
       params:set_action(id, function(param)
         osc.send({ "localhost", 57120 }, "/hs010/" .. val[1], { vformatter(param) }) -- send param value
       end)
@@ -139,9 +139,15 @@ function add_hs010_player()
     end
 
     function player:note_on(note, vel, properties)
+        local forceslide = false
+        properties = properties or {}
+        if properties.slide ~= nil then
+          forceslide = properties.slide
+        end
         osc.send({ "localhost", 57120 }, "/hs010/note_on", {
             note, -- note no
-            vel -- velocity
+            vel, -- velocity
+            forceslide -- is forced slide
         })
     end
 
