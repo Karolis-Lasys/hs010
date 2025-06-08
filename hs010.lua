@@ -495,10 +495,10 @@ function key(nn, z)
   if nn == 1 and z == 0 then
     ALTKEY = false
   end
-  if nn == 2 and z == 1 and ALTKEY then
+  if nn == 2 and z == 1 then
     seqlat:toggle()
   end
-  if nn == 3 and z == 1 and ALTKEY then
+  if nn == 3 and z == 1 then
     reset_seqs()
   end
   redraw_screen()
