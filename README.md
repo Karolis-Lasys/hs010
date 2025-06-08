@@ -35,8 +35,8 @@ The sequencer is, as mentioned before, inspired by roullete by fors and consists
 Offset A and offset B add onto the current pitch or, if you press and hold key 1 and turn encoder 3 to turn that step into a polystep, play that step polyphonically.   
 The polyphony works by taking the current pitch from lane 1 (the pitch lane), adding the offset, quantizing the new note to the scale and sending that note to the synth engine.  
 
-You can navigate the sequencer with encoder 1, change the actively editable step with encoder 2 and change the value with encoder 3. 
-Key 1 can be held down to reach additional functions, when turning encoder 1 you then change the length of that lane, turning encoder 2 changes step division and encoder 3, as mentioned before, on Offset A and B lanes makes that step play polyphonically.  
+You can navigate the sequencer with encoder 1, change the actively editable step with encoder 2 and change the value with encoder 3.  
+Key 1 can be held down to reach additional functions, when turning encoder 1 you can change the length of that lane, turning encoder 2 changes step division and encoder 3, as mentioned before, on Offset A and B lanes makes that step play polyphonically.   
 Key 2 stops the sequencer and key 3 resets the playheads back to step 1 on all lanes.
 
 And that's pretty much it, enjoy playing!  
