@@ -278,7 +278,7 @@ function init_params()
     local readpset = true
     local datapath = norns.state.path .. "data/" .. psetnumber .. ".txt"
     if util.file_exists(datapath) then
-      norns.system_cmd("mv " .. datapath .. " " .. psettxtpath)
+      util.os_capture("mv " .. datapath .. " " .. psettxtpath)
     else
         if not util.file_exists(psettxtpath) then
         readpset = false
