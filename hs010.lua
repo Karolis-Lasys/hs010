@@ -274,9 +274,22 @@ function init_params()
   end
 
   params.action_read = function(psetfilename,psetsilent,psetnumber)
-    local formatted_tables = tab.load(norns.state.data .. psetnumber .. ".txt")
-    for k, v in pairs(formatted_tables) do
-      note_table[k]:settable(v)
+    local psettxtpath = norns.state.data .. psetnumber .. ".txt"
+    local readpset = true
+    local datapath = norns.state.path .. "data/" .. psetnumber .. ".txt"
+    if util.file_exists(datapath) then
+      norns.system_cmd("mv " .. datapath .. " " .. psettxtpath)
+    else
+        if not util.file_exists(psettxtpath) then
+        readpset = false
+        print("pset " .. psetnumber .. " is missing its data file")
+      end
+    end
+    if readpset then
+      local formatted_tables = tab.load(psettxtpath)
+      for k, v in pairs(formatted_tables) do
+          note_table[k]:settable(v)
+      end
     end
   end
 
