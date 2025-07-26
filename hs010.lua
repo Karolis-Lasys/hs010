@@ -6,6 +6,16 @@
 -- and sequencer
 --
 -- Made by @onegin
+--
+-- E1 - select seq lane
+-- E2 - select step
+-- E3 - change step value
+-- hold K1 - ALT
+-- K2 - play/stop seq
+-- K3 - reset playheads
+-- A+E1 - lane length
+-- A+E2 - lane clock div
+-- A+E3 - lane modifier
 
 -- prereqs
 local lib_lat = require 'lattice'
@@ -17,8 +27,8 @@ local UI = require 'ui'
 local player
 
 -- consts
-local CONST_NOTELEN = {1 / 64, 1 / 32, 1 / 24, 1 / 16, 1 / 12, 1 / 8, 1 / 6, 1 / 4, 1 / 3, 1 / 2, 3 / 4, 1, 2, 3, 4, 6, 8, 12, 16, 24, 32}
-local CONST_NOTELEN_STR = {"1/64", "1/32", "1/24", "1/16", "1/12", "1/8", "1/6", "1/4", "1/3", "1/2", "3/4", "1", "2", "3", "4", "6", "8", "12", "16", "24", "32"}
+local CONST_NOTELEN = {1 / 32, 1 / 24, 1 / 16, 1 / 12, 1 / 8, 1 / 6, 1 / 4, 1 / 3, 1 / 2, 3 / 4, 1, 2, 3, 4, 6, 8}
+local CONST_NOTELEN_STR = {"1/32", "1/24", "1/16", "1/12", "1/8", "1/6", "1/4", "1/3", "1/2", "3/4", "1", "2", "3", "4", "6", "8"}
 local CONST_W = 128
 local CONST_H = 64
 local CONST_LINEHEIGHT = 8
@@ -44,6 +54,51 @@ debugscriptflag = false
 -- scale stuff
 local scale_name
 local scale_root
+-- grid
+local g
+local grid_page = 1 -- page 1 - edit, page 2 - length, page 3 - division
+local grid_offset = 1
+local val_select = false
+local val_select_item
+local frame = 0
+
+function g_deg(v)
+  return math.floor(util.linlin(1,7,2,12,v))
+end
+
+function g_vel(v)
+  return math.floor(util.linlin(1,8,2,12,v))
+end
+
+function g_oct(v)
+  return math.floor(util.linlin(1,8,2,12,v))
+end
+
+function g_off_a(v)
+  local blink = 1
+  if v[2] then
+    blink = frame % 10 / 9
+  end
+  return math.floor(util.linlin(-12,12,2,12,v[1]) * blink)
+end
+
+function g_off_b(v)
+  local blink = 1
+  if v[2] then
+    blink = frame % 10 / 9
+  end
+  return math.floor(util.linlin(-12,12,2,12,v[1]) * blink)
+end
+
+function g_gate(v)
+  return v and 8 or 2
+end
+
+function g_slide(v)
+  return v and 8 or 2
+end
+
+local grid_page_func = {g_deg, g_vel, g_oct, g_off_a, g_off_b, g_gate, g_slide}
 
 -- various utility functions (move to other file)
 function data_to_string(item)
@@ -172,6 +227,11 @@ function init()
   init_tables()
   init_seqs()
   init_prev_bufs()
+  -- init grid
+  g = grid.connect()
+  g:refresh()
+  g.key = handle_grid
+  draw_grid()
   -- init some screen stuff
   screen.level(15)
   screen.aa(0)
@@ -185,9 +245,156 @@ function init()
   -- set up encoder stuff
   norns.enc.sens(2, 3)
   -- start redraw loop
-  redraw_loop = metro.init(redraw_screen, 0.25, - 1)
+  redraw_loop = metro.init(redraw_everything, 0.125, - 1)
   redraw_loop:start()
   -- init done!
+end
+
+function redraw_everything()
+  frame = frame + 1
+  if frame > 254 then frame = 0 end
+  redraw_screen()
+  draw_grid()
+end
+
+function pick_value(val, item, x, y)
+  local arrname = val[1]
+  local ox = val[2]
+  local oy = val[3]
+  local val_amount = CONST_BOUNDS[oy][2] - CONST_BOUNDS[oy][1] + 1
+  local offset_x = x < 9 and 0 or 8;
+  local retval = note_table[arrname][ox + (grid_offset - 1) * 16]
+  local selectedval = (y - 1) * 8 + (x - offset_x)
+  if val_amount >= selectedval then
+    local vv = math.floor(util.linlin(
+      1, val_amount,
+      CONST_BOUNDS[oy][1], CONST_BOUNDS[oy][2],
+      selectedval
+    ))
+    if oy > 3 then retval[1] = vv
+    else retval = vv
+    end
+  end
+  if oy > 3 then
+    if y == 7 and x == offset_x + 1 then retval[2] = false end
+    if y == 7 and x == offset_x + 2 then retval[2] = true end
+  end
+  print(retval)
+  return retval
+end
+
+function draw_value_picker(arrname, x, y)
+  local val_amount = CONST_BOUNDS[y][2] - CONST_BOUNDS[y][1] + 1
+  local idx = 1
+  local list_val = note_table[arrname][x + (grid_offset - 1) * 16]
+  local curval = math.floor(util.linlin(
+    CONST_BOUNDS[y][1], CONST_BOUNDS[y][2],
+    1, val_amount,
+    y > 3 and list_val[1] or list_val
+  ))
+  local offset_x = x < 9 and 8 or 0;
+  for iy = 1, 7, 1 do
+    for ix = offset_x + 1, offset_x + 8, 1 do
+      local lightval = 0
+      if idx == curval then
+        lightval = 15
+        idx = idx + 1
+      elseif idx <= val_amount then
+        lightval = math.floor(12 * idx / val_amount)
+        idx = idx + 1
+      end
+      g:led(ix, iy, lightval)
+    end
+  end
+  if y > 3 then
+    local poly_on = list_val[2]
+    g:led(offset_x + 1, 7, poly_on and 2 or 15)
+    g:led(offset_x + 2, 7, poly_on and 15 or 2)
+  end
+end
+
+function handle_grid(x, y, z)
+  if z == 1 then
+    if y == 8 then
+      if x == 1 then seqlat:toggle() end
+      if x == 2 then reset_seqs() end
+      if x > 3 and x < 7 then grid_page = x - 3 end
+      if x > 12 then
+        -- more than 4 pages get buggy, to fix in the future  
+        --if grid_offset > 3 and x == 16 then
+        --  grid_offset = grid_offset + 1
+        --else
+          grid_offset = x - 12
+        --end
+      end
+    elseif val_select then
+      local item = val_select_item[2] + (grid_offset - 1) * 16
+      local newval = pick_value(val_select_item, item, x, y)
+      note_table[val_select_item[1]][item] = newval
+    else
+      if grid_page == 3 then
+        local arrname = CONST_ARRAYNAMES[y]
+        params:set(n(arrname .. "_div"), x)
+      elseif grid_page == 2 then
+        local arrname = CONST_ARRAYNAMES[y]
+        params:set(n(arrname .. "_len"), x + (grid_offset - 1) * 16)
+      elseif grid_page == 1 and y < 6 then
+        local arrname = CONST_ARRAYNAMES[y]
+        if x + (grid_offset - 1) * 16 <= #note_table[arrname] then
+          val_select = true
+          val_select_item = {arrname, x, y}
+        end
+      else
+        local arrname = CONST_ARRAYNAMES[y]
+        local item = x + (grid_offset - 1) * 16
+        if item <= #note_table[arrname] then
+          note_table[arrname][item] = not note_table[arrname][item]
+        end
+      end
+    end
+  else
+    if val_select and
+      grid_page == 1 and
+      x == val_select_item[2] and
+      y == val_select_item[3] then val_select = false end
+  end
+  draw_grid()
+end
+
+function draw_grid()
+  g:all(0)
+  if grid_page ~= 3 then
+    for k, v in pairs(CONST_ARRAYNAMES) do
+      local nt = note_table[v]
+      local ix = nt.ix
+      local offset_x = (grid_offset - 1) * 16
+      for ig=1,#nt-offset_x,1 do
+        if ig > 16 then break end
+        g:led(ig, k, ig + offset_x == ix and 15 or grid_page_func[k](nt[ig + offset_x]))
+      end
+    end
+  else
+    for k, v in pairs(CONST_ARRAYNAMES) do
+      g:led(params:get(n(v .. "_div")), k, 15)
+    end
+  end
+  if val_select then
+    draw_value_picker(val_select_item[1], val_select_item[2], val_select_item[3])
+  end
+  g:led(1, 8, seqlat.enabled and 15 or 4)
+  g:led(2, 8, 4)
+  for ig=1,3,1 do
+    g:led(3 + ig, 8, ig == grid_page and 15 or 4)
+  end
+
+  for ig=1,4,1 do
+    local lightval = 4
+    local blink = frame % 10 / 9
+    if grid_offset == ig then lightval = 15 end
+    if grid_offset > 4 and ig == 4 then lightval = math.floor(15 * blink) end
+    g:led(12+ig, 8, lightval)
+  end
+  g:refresh()
 end
 
 function n(name)
@@ -242,19 +449,19 @@ function init_params()
 
   -- sequence divisions
   params:add_separator(n("seq_dev"), "Sequence pulse divisions")
-  params:add_option(n("note_div"), "Note div", CONST_NOTELEN_STR, 8)
+  params:add_option(n("note_div"), "Note div", CONST_NOTELEN_STR, 5)
   params:set_action(n("note_div"), set_update_division("note"))
-  params:add_option(n("vel_div"), "Velocity div", CONST_NOTELEN_STR, 8)
+  params:add_option(n("vel_div"), "Velocity div", CONST_NOTELEN_STR, 5)
   params:set_action(n("vel_div"), set_update_division("vel"))
-  params:add_option(n("oct_div"), "Octave div", CONST_NOTELEN_STR, 8)
+  params:add_option(n("oct_div"), "Octave div", CONST_NOTELEN_STR, 5)
   params:set_action(n("oct_div"), set_update_division("oct"))
-  params:add_option(n("off_a_div"), "Offset A div", CONST_NOTELEN_STR, 8)
+  params:add_option(n("off_a_div"), "Offset A div", CONST_NOTELEN_STR, 5)
   params:set_action(n("off_a_div"), set_update_division("off_a"))
-  params:add_option(n("off_b_div"), "Offset B div", CONST_NOTELEN_STR, 8)
+  params:add_option(n("off_b_div"), "Offset B div", CONST_NOTELEN_STR, 5)
   params:set_action(n("off_b_div"), set_update_division("off_b"))
-  params:add_option(n("slide_div"), "Slide div", CONST_NOTELEN_STR, 8)
+  params:add_option(n("slide_div"), "Slide div", CONST_NOTELEN_STR, 5)
   params:set_action(n("slide_div"), set_update_division("slide"))
-  params:add_option(n("gate_div"), "Gate div", CONST_NOTELEN_STR, 8)
+  params:add_option(n("gate_div"), "Gate div", CONST_NOTELEN_STR, 5)
   params:set_action(n("gate_div"), set_update_division("gate"))
 
   -- misc stuff
