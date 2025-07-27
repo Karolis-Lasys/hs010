@@ -320,7 +320,7 @@ function handle_grid(x, y, z)
       if x == 2 then reset_seqs() end
       if x > 3 and x < 7 then grid_page = x - 3 end
       if x > 12 then
-        -- more than 4 pages get buggy, to fix in the future  
+        -- this has a bug if the page is more than 4, fix later
         --if grid_offset > 3 and x == 16 then
         --  grid_offset = grid_offset + 1
         --else

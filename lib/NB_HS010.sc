@@ -30,7 +30,7 @@ NB_HS010 {
 						noise
 				]);
 				var env = EnvGen.kr(Env.adsr(att, dec, sus, rel, curve: crv), gate, doneAction: Done.pauseSelf);
-				var cutoff = (lpf + (lpflfo * lfo) + (lpfenv * env) + (lpfpitch * freq)).clip(20, 19000);
+				var cutoff = Clip.kr(lpf + (lpflfo * lfo) + (lpfenv * env) + (lpfpitch * freq), 20, 18000);
 				var pulsew = (pw + (pwlfo * lfo) + (pwenv * env)).clip(0, 1);
 				var finfreq = Lag.kr(freq, glide) + (pitchlfo * lfo);
 				var sine = Osc.ar(sinidx, finfreq);
@@ -57,7 +57,7 @@ NB_HS010 {
 				sig = RLPF.ar(sig, cutoff, lpq);
 				sig = Pan2.ar(sig * finenv, pan, amp * vel);
 				sig = LeakDC.ar(sig);
-				Out.ar(out, LeakDC.ar(sig));
+				Out.ar(out, sig);
 				Out.ar(sendABus, sendA * sig);
 				Out.ar(sendBBus, sendB * sig);
 			}).add;
@@ -70,17 +70,17 @@ NB_HS010 {
 				[\pwenv, "f", -1, 1],
 				[\lfosel, "f", 0, 1],
 				[\lfofreq, "f", 0.01, 100],
-				[\pitchlfo, "i", 0, 20000],
+				[\pitchlfo, "i", 0, 18000],
 				[\sinelev, "f", 0, 1],
 				[\trilev, "f", 0, 1],
 				[\sawlev, "f", 0, 1],
 				[\pulselev, "f", 0, 1],
 				[\sublev, "f", 0, 1],
 				[\noiselev, "f", 0, 1],
-				[\lpf, "i", 20, 20000],
-				[\lpq, "f", 0.05, 1.5],
-				[\lpfenv, "i", 0, 20000],
-				[\lpflfo, "i", 0, 20000],
+				[\lpf, "i", 20, 18000],
+				[\lpq, "f", 0.1, 1.5],
+				[\lpfenv, "i", 0, 18000],
+				[\lpflfo, "i", 0, 18000],
 				[\lpfpitch, "f", 0, 1],
 				[\att, "f", 0.01, 10],
 				[\dec, "f", 0.01, 10],

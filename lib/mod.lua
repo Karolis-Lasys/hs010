@@ -9,14 +9,6 @@ local function n(s)
   return name .. "_" .. s
 end
 
-local function format_exp(i)
-  return i - 1
-end
-
-local function return_unchanged(s)
-  return s
-end
-
 local function set_params_from_file(filename)
   local partab = hsparams:load_pset(filename)
   for key, val in pairs(partab) do
@@ -62,11 +54,7 @@ local function add_hs010_params(reg)
       local step = val[6]
       local default_val = val[7]
       local quantum = val[8]
-      local vformatter = return_unchanged
-
-      if vmin == 1 and scaling == "exp" then
-        vformatter = format_exp
-      end
+      local vformatter = val[9]
 
       params:add_control(
         id,
@@ -78,7 +66,7 @@ local function add_hs010_params(reg)
       )
       table.insert(reg.parids, id)
       params:set_action(id, function(param)
-        osc.send({ "localhost", 57120 }, "/hs010/" .. val[1], { vformatter(param) }) -- send param value
+        osc.send({ "localhost", 57120 }, "/hs010/" .. val[1], { param }) -- send param value
       end)
     end
     params:add_separator(n("presets"), "Presets")
