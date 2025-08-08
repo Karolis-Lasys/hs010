@@ -85,7 +85,7 @@ local hs_specs = {
   {"lpfpitch", "Pitch->Cutoff", 0, 1, "lin", 0.01, 0, 0.01, return_unchanged},
   {"att", "Attack", 0.01, 10, "lin", 0.01, 0.01, 0.01/(10-0.01), return_unchanged},
   {"dec", "Decay", 0.01, 10, "lin", 0.01, 0.5, 0.01/(10-0.01), return_unchanged},
-  {"sus", "Sustain", 0, 1, "lin", 0.01, 0.5, 0.01, 0.01, return_unchanged},
+  {"sus", "Sustain", 0, 1, "lin", 0.01, 0.5, 0.01, return_unchanged},
   {"rel", "Release", 0.01, 10, "lin", 0.01, 0.5, 0.01/(10-0.01), return_unchanged},
   {"crv", "Env. Curve", -6, 0, "lin", 1, -4, 0.01, return_unchanged},
   {"envtype", "Env. Type", 0, 1, "lin", 1, 0, 1, _envtype},
