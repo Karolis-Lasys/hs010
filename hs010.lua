@@ -390,17 +390,21 @@ end
 
 function enc(nn, d)
   if nn == 1 then
-    if ALTKEY and note_tab ~= 8 then
+    if ALTKEY and notetab ~= 8 then
       local arrname = hsc.ARRAYNAMES[notetab]
       params:delta(hsc.n(arrname .. "_len"), d)
+    elseif ALTKEY and notetab == 8 then
+      params:delta(hsc.n("patchange_len"), d)
     else
       notetab = util.wrap(notetab + d, 1, #hsc.ARRAYNAMES + 1)
     end
   end
   if nn == 2 then
-    if ALTKEY and note_tab ~= 8 then
+    if ALTKEY and notetab ~= 8 then
       local arrname = hsc.ARRAYNAMES[notetab]
       params:delta(hsc.n(arrname .. "_div"), d)
+    elseif ALTKEY and notetab == 8 then
+      params:delta(hsc.n("patchange_div"), d)
     else
       if notetab == 8 then
         patterns.switching = false
